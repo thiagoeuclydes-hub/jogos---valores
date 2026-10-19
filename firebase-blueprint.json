@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "Series": {
+      "title": "Series",
+      "description": "A dance series or group class.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the series."
+        },
+        "accessoryValue": {
+          "type": "number",
+          "description": "The cost of accessories for this series."
+        }
+      },
+      "required": ["name", "accessoryValue"]
+    },
+    "Participant": {
+      "title": "Participant",
+      "description": "A student participating in a series.",
+      "type": "object",
+      "properties": {
+        "seriesId": {
+          "type": "string",
+          "description": "ID of the series the participant belongs to."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the participant."
+        },
+        "paidAmount": {
+          "type": "number",
+          "description": "Amount already paid by the participant."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last time the payment was updated."
+        }
+      },
+      "required": ["seriesId", "name", "paidAmount"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "An outgoing cost (saída).",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description of the expense."
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount spent."
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date of the expense."
+        }
+      },
+      "required": ["description", "amount", "date"]
+    }
+  },
+  "firestore": {
+    "series": {
+      "schema": "Series",
+      "description": "Collection of dance series."
+    },
+    "participants": {
+      "schema": "Participant",
+      "description": "Collection of participants across all series."
+    },
+    "expenses": {
+      "schema": "Expense",
+      "description": "Collection of expenses."
+    }
+  }
+}

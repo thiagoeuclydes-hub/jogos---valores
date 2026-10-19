@@ -1,0 +1,6 @@
+{
+  "name": "Controle de Adereços de Dança",
+  "description": "Sistema para controle de valores, pagamentos e saídas de adereços de dança, organizado por séries e participantes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

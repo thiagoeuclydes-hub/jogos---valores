@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return isSignedIn() && request.auth.token.email == 'thiagoeuclydes@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Series Validation
+    function isValidSeries(data) {
+      return data.keys().hasAll(['name', 'accessoryValue']) &&
+             data.keys().hasOnly(['name', 'accessoryValue']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.accessoryValue is number && data.accessoryValue >= 0;
+    }
+
+    // Public access as requested by user (bypassing Google Auth)
+    // WARNING: This makes the database accessible to anyone with the URL.
+    match /series/{seriesId} {
+      allow read, write: if true;
+    }
+
+    match /participants/{participantId} {
+      allow read, write: if true;
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if true;
+    }
+  }
+}
