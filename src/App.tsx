@@ -30,6 +30,43 @@ import { motion, AnimatePresence } from 'motion/react';
 import { db, testConnection } from './firebase';
 import { Series, Participant, Expense, OperationType, FirestoreErrorInfo } from './types';
 
+function SafeDate({ date }: { date: any }) {
+  if (!date) return <span className="opacity-20 italic">Processando...</span>;
+  try {
+    // Handle Firestore Timestamp or Date object
+    const d = typeof date.toDate === 'function' ? date.toDate() : date;
+    return <span>{new Intl.DateTimeFormat('pt-BR').format(d)}</span>;
+  } catch (e) {
+    return <span className="opacity-20">--/--/--</span>;
+  }
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-navy-dark flex flex-col items-center justify-center p-8 text-center">
+          <AlertCircle className="w-16 h-16 text-neon-red mb-4" />
+          <h2 className="text-2xl font-black text-white mb-2">OPS! ALGO DEU ERRADO</h2>
+          <p className="text-white/60 mb-6">O aplicativo encontrou um erro inesperado.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-neon-blue text-navy-dark font-black py-3 px-8 rounded-xl"
+          >
+            RECARREGAR APLICATIVO
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -55,6 +92,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'series' | 'expenses'>('dashboard');
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   useEffect(() => {
     testConnection();
@@ -70,13 +108,16 @@ export default function App() {
     setLoading(true);
     const unsubSeries = onSnapshot(collection(db, 'series'), (snapshot) => {
       const seriesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Series));
-      setSeries(seriesData.sort((a, b) => a.name.localeCompare(b.name)));
+      setSeries(seriesData.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLoading(false);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'series'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'series');
+      setLoading(false);
+    });
 
     const unsubParticipants = onSnapshot(collection(db, 'participants'), (snapshot) => {
       const participantData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
-      setParticipants(participantData.sort((a, b) => a.name.localeCompare(b.name)));
+      setParticipants(participantData.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'participants'));
 
     const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snapshot) => {
@@ -137,28 +178,28 @@ export default function App() {
         <div className="bg-gradient-to-br from-neon-blue to-neon-green w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-neon-blue/20">
           <Lock className="w-10 h-10 text-navy-dark" />
         </div>
-        <h1 className="text-4xl font-black text-white mb-2 tracking-tighter neon-text-blue">DançApp</h1>
-        <p className="text-neon-green/80 mb-10 font-medium tracking-wide uppercase text-xs">Controle de Adereços</p>
+        <h1 className="text-2xl font-black text-white mb-2 tracking-tighter neon-text-blue">DançApp</h1>
+        <p className="text-neon-green/80 mb-8 font-medium tracking-wide uppercase text-[10px]">Controle de Adereços</p>
         
-        <form onSubmit={handleLogin} className="space-y-6 text-left">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-neon-blue uppercase tracking-[0.2em] ml-1">Usuário</label>
+        <form onSubmit={handleLogin} className="space-y-4 text-left">
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-neon-blue uppercase tracking-[0.2em] ml-1">Usuário</label>
             <input 
               type="text" 
               value={username}
               onChange={e => setUsername(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue focus:bg-white/10 outline-none transition-all text-white font-semibold"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-neon-blue focus:bg-white/10 outline-none transition-all text-white font-semibold text-sm"
               placeholder="Prof.Thiago"
               required
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-neon-blue uppercase tracking-[0.2em] ml-1">Senha</label>
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-neon-blue uppercase tracking-[0.2em] ml-1">Senha</label>
             <input 
               type="password" 
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue focus:bg-white/10 outline-none transition-all text-white font-semibold"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-neon-blue focus:bg-white/10 outline-none transition-all text-white font-semibold text-sm"
               placeholder="••••••••"
               required
             />
@@ -177,9 +218,9 @@ export default function App() {
 
           <button 
             type="submit"
-            className="w-full bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(0,242,255,0.4)] active:scale-95"
+            className="w-full bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_15px_rgba(0,242,255,0.3)] active:scale-95 text-sm"
           >
-            <LogIn className="w-6 h-6" />
+            <LogIn className="w-5 h-5" />
             ENTRAR
           </button>
         </form>
@@ -194,7 +235,8 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-navy-dark text-white pb-20 lg:pb-0 lg:pl-64 font-sans">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-navy-dark text-white pb-20 lg:pb-0 lg:pl-64 font-sans">
       {/* Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 bg-navy-dark border-r border-white/10 fixed inset-y-0 left-0 z-50">
         <div className="p-8">
@@ -259,14 +301,14 @@ export default function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="p-4 lg:p-10 max-w-7xl mx-auto">
-        <header className="mb-10">
-          <h2 className="text-3xl font-black text-white tracking-tight mb-2">
+      <main className="p-4 lg:p-8 max-w-7xl mx-auto">
+        <header className="mb-8">
+          <h2 className="text-xl font-black text-white tracking-tight mb-2 uppercase">
             {activeTab === 'dashboard' ? 'PAINEL GERAL' : 
              activeTab === 'series' ? (selectedSeries ? `SÉRIE: ${selectedSeries.name.toUpperCase()}` : 'MINHAS SÉRIES') : 
              'CONTROLE DE SAÍDAS'}
           </h2>
-          <div className="h-1 w-20 bg-gradient-to-r from-neon-blue to-transparent rounded-full"></div>
+          <div className="h-1 w-12 bg-gradient-to-r from-neon-blue to-transparent rounded-full"></div>
         </header>
 
         <AnimatePresence mode="wait">
@@ -279,20 +321,20 @@ export default function App() {
               className="space-y-8"
             >
               {series.length === 0 ? (
-                <div className="bg-white/5 backdrop-blur-sm p-16 rounded-[2rem] border border-white/10 text-center space-y-8 shadow-2xl">
-                  <div className="bg-neon-blue/10 w-24 h-24 rounded-3xl flex items-center justify-center mx-auto border border-neon-blue/20">
-                    <FileText className="w-12 h-12 text-neon-blue" />
+                <div className="bg-white/5 backdrop-blur-sm p-10 rounded-2xl border border-white/10 text-center space-y-6 shadow-2xl">
+                  <div className="bg-neon-blue/10 w-16 h-16 rounded-xl flex items-center justify-center mx-auto border border-neon-blue/20">
+                    <FileText className="w-8 h-8 text-neon-blue" />
                   </div>
                   <div className="max-w-sm mx-auto">
-                    <h3 className="text-2xl font-black mb-3">BEM-VINDO, PROF. THIAGO!</h3>
-                    <p className="text-white/60 font-medium">Sua conta está ativa. Comece cadastrando sua primeira turma para gerenciar os adereços.</p>
+                    <h3 className="text-lg font-black mb-2 uppercase tracking-tight">BEM-VINDO, PROF. THIAGO!</h3>
+                    <p className="text-white/60 font-medium text-xs">Sua conta está ativa. Comece cadastrando sua primeira turma para gerenciar os adereços.</p>
                   </div>
                   <button 
                     onClick={() => setActiveTab('series')}
-                    className="bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-4 px-10 rounded-2xl transition-all inline-flex items-center gap-3 shadow-[0_0_30px_rgba(0,242,255,0.3)]"
+                    className="bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-3 px-6 rounded-xl transition-all inline-flex items-center gap-2 text-xs"
                   >
                     CADASTRAR PRIMEIRA SÉRIE
-                    <Plus className="w-6 h-6" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
@@ -305,9 +347,9 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="bg-white/5 backdrop-blur-sm p-8 rounded-[2rem] border border-white/10">
-                      <h3 className="font-black text-xl mb-8 flex items-center gap-3">
-                        <TrendingUp className="w-6 h-6 text-neon-green" />
+                    <div className="bg-white/5 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
+                      <h3 className="font-black text-lg mb-6 flex items-center gap-3 uppercase tracking-tight">
+                        <TrendingUp className="w-5 h-5 text-neon-green" />
                         ARRECADAÇÃO POR SÉRIE
                       </h3>
                       <div className="space-y-6">
@@ -339,9 +381,9 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="bg-white/5 backdrop-blur-sm p-8 rounded-[2rem] border border-white/10">
-                      <h3 className="font-black text-xl mb-8 flex items-center gap-3">
-                        <TrendingDown className="w-6 h-6 text-neon-red" />
+                    <div className="bg-white/5 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
+                      <h3 className="font-black text-lg mb-6 flex items-center gap-3 uppercase tracking-tight">
+                        <TrendingDown className="w-5 h-5 text-neon-red" />
                         ÚLTIMAS SAÍDAS
                       </h3>
                       <div className="space-y-4">
@@ -349,10 +391,12 @@ export default function App() {
                           <div key={e.id} className="flex justify-between items-center p-4 bg-white/2 hover:bg-white/5 rounded-2xl transition-all border border-white/5 group">
                             <div>
                               <p className="font-bold text-white/90 group-hover:text-neon-red transition-colors">{e.description}</p>
-                              <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mt-1">{e.date?.toDate().toLocaleDateString('pt-BR')}</p>
+                              <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mt-1">
+                                <SafeDate date={e.date} />
+                              </p>
                             </div>
-                            <span className="text-neon-red font-black text-lg">
-                              -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                            <span className="text-neon-red font-black text-base">
+                              -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount || 0)}
                             </span>
                           </div>
                         ))}
@@ -377,9 +421,9 @@ export default function App() {
               exit={{ opacity: 0, x: 10 }}
               className="space-y-10"
             >
-              <div className="bg-gradient-to-br from-neon-blue/5 to-neon-green/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-neon-blue/10 blur-[50px]"></div>
-                <h3 className="font-black text-2xl mb-8 tracking-tighter italic uppercase text-neon-blue">NOVA SÉRIE DE ALUNOS</h3>
+              <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-neon-blue/5 blur-[40px]"></div>
+                <h3 className="font-black text-lg mb-6 tracking-tight uppercase text-neon-blue">NOVA SÉRIE DE ALUNOS</h3>
                 <SeriesForm />
               </div>
               
@@ -422,39 +466,41 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-10"
+              className="space-y-8"
             >
-              <div className="bg-gradient-to-br from-neon-red/5 to-neon-yellow/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-neon-red/10 blur-[50px]"></div>
-                <h3 className="font-black text-2xl mb-8 tracking-tighter italic uppercase text-neon-red">REGISTRAR NOVA SAÍDA</h3>
+              <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-neon-red/5 blur-[40px]"></div>
+                <h3 className="font-black text-lg mb-6 tracking-tight uppercase text-neon-red">REGISTRAR NOVA SAÍDA</h3>
                 <ExpenseForm />
               </div>
 
-              <div className="bg-white/5 backdrop-blur-md rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+              <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-white/2 border-b border-white/10 uppercase font-black text-[10px] tracking-[0.2em] text-white/40">
-                        <th className="px-8 py-6">Descrição</th>
-                        <th className="px-8 py-6">Data</th>
-                        <th className="px-8 py-6">Valor Gasto</th>
-                        <th className="px-8 py-6 text-right">Ações</th>
+                      <tr className="bg-white/2 border-b border-white/10 uppercase font-black text-[9px] tracking-[0.2em] text-white/40">
+                        <th className="px-6 py-4">Descrição</th>
+                        <th className="px-6 py-4">Data</th>
+                        <th className="px-6 py-4">Valor Gasto</th>
+                        <th className="px-6 py-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {expenses.map(e => (
                         <tr key={e.id} className="hover:bg-white/5 transition-all group">
-                          <td className="px-8 py-6 font-bold text-lg text-white/90 group-hover:text-neon-red transition-colors">{e.description}</td>
-                          <td className="px-8 py-6 text-white/40 font-black text-xs">{e.date?.toDate().toLocaleDateString('pt-BR')}</td>
-                          <td className="px-8 py-6 font-black text-neon-red text-xl tracking-tighter">
-                            -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                          <td className="px-6 py-4 font-bold text-base text-white/90 group-hover:text-neon-red transition-colors">{e.description}</td>
+                          <td className="px-6 py-4 text-white/40 font-black text-[10px]">
+                            <SafeDate date={e.date} />
                           </td>
-                          <td className="px-8 py-6 text-right">
+                          <td className="px-6 py-4 font-black text-neon-red text-base tracking-tighter">
+                            -{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount || 0)}
+                          </td>
+                          <td className="px-6 py-4 text-right">
                             <button 
                               onClick={() => handleDeleteExpense(e.id)} 
-                              className="bg-white/5 hover:bg-neon-red/20 text-white/20 hover:text-neon-red p-3 rounded-xl transition-all"
+                              className="bg-white/5 hover:bg-neon-red/20 text-white/20 hover:text-neon-red p-2 rounded-lg transition-all"
                             >
-                              <Trash2 className="w-5 h-5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>
@@ -473,6 +519,7 @@ export default function App() {
         </AnimatePresence>
       </main>
     </div>
+    </ErrorBoundary>
   );
 
   async function handleDeleteSeries(id: string) {
@@ -545,16 +592,16 @@ function StatCard({ title, value, icon, color }: { title: string, value: number,
     yellow: 'text-neon-yellow'
   };
   return (
-    <div className={`p-6 rounded-[1.5rem] border ${colors[color]} backdrop-blur-sm shadow-xl`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="bg-white/5 p-3 rounded-xl">
+    <div className={`p-4 rounded-xl border ${colors[color]} backdrop-blur-sm shadow-xl`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="bg-white/5 p-2 rounded-lg text-xs">
           {icon}
         </div>
-        <div className={`h-2 w-2 rounded-full ${textColors[color]} bg-current shadow-[0_0_8px_currentColor]`}></div>
+        <div className={`h-1.5 w-1.5 rounded-full ${textColors[color]} bg-current shadow-[0_0_8px_currentColor]`}></div>
       </div>
       <div>
-        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-1">{title}</p>
-        <p className={`text-2xl font-black tracking-tighter ${textColors[color]}`}>
+        <p className="text-[8px] font-black text-white/40 uppercase tracking-[0.2em] mb-1">{title}</p>
+        <p className={`text-lg font-black tracking-tighter ${textColors[color]}`}>
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
         </p>
       </div>
@@ -570,9 +617,10 @@ function SeriesForm() {
     e.preventDefault();
     if (!name || !val) return;
     try {
+      const accessoryValue = parseFloat(val.replace(',', '.')) || 0;
       await addDoc(collection(db, 'series'), {
         name,
-        accessoryValue: parseFloat(val)
+        accessoryValue
       });
       setName('');
       setVal('');
@@ -582,29 +630,29 @@ function SeriesForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-      <div className="space-y-2">
-        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Turma / Série</label>
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div className="space-y-1">
+        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Turma / Série</label>
         <input 
           type="text" 
           value={name} 
           onChange={e => setName(e.target.value)}
-          className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all text-white font-bold"
+          className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all text-white font-bold text-sm"
           placeholder="Ex: 6º ano, 7º ano..."
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Valor Unitário (R$)</label>
+      <div className="space-y-1">
+        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Valor Unitário (R$)</label>
         <input 
           type="number" 
           value={val} 
           onChange={e => setVal(e.target.value)}
-          className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all text-white font-bold"
+          className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all text-white font-bold text-sm"
           placeholder="0,00"
         />
       </div>
-      <button className="bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(0,242,255,0.2)] active:scale-95">
-        <Plus className="w-6 h-6" />
+      <button className="bg-neon-blue hover:bg-neon-blue/90 text-navy-dark font-black py-2.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,242,255,0.2)] active:scale-95 text-xs">
+        <Plus className="w-4 h-4" />
         SALVAR SÉRIE
       </button>
     </form>
@@ -613,36 +661,36 @@ function SeriesForm() {
 
 function SeriesCard({ series, participantsCount, onClick, onDelete }: { series: Series, participantsCount: number, onClick: () => void, onDelete: () => void }) {
   return (
-    <div className="bg-white/5 backdrop-blur-sm p-8 rounded-[2rem] border border-white/10 hover:border-neon-blue/50 transition-all group relative overflow-hidden shadow-2xl">
-      <div className="absolute top-0 right-0 w-24 h-24 bg-neon-blue/5 blur-[40px] group-hover:bg-neon-blue/10 transition-all"></div>
+    <div className="bg-white/5 backdrop-blur-sm p-6 rounded-2xl border border-white/10 hover:border-neon-blue/50 transition-all group relative overflow-hidden shadow-2xl">
+      <div className="absolute top-0 right-0 w-20 h-20 bg-neon-blue/5 blur-[30px] group-hover:bg-neon-blue/10 transition-all"></div>
       
       <button 
         onClick={onDelete}
-        className="absolute top-6 right-6 text-white/10 hover:text-neon-red p-2 rounded-lg hover:bg-neon-red/10 transition-all z-10"
+        className="absolute top-4 right-4 text-white/10 hover:text-neon-red p-2 rounded-lg hover:bg-neon-red/10 transition-all z-10"
       >
-        <Trash2 className="w-5 h-5" />
+        <Trash2 className="w-4 h-4" />
       </button>
 
-      <div className="bg-neon-blue/10 w-16 h-16 rounded-[1.5rem] flex items-center justify-center mb-6 border border-neon-blue/20">
-        <Users className="w-8 h-8 text-neon-blue" />
+      <div className="bg-neon-blue/10 w-12 h-12 rounded-xl flex items-center justify-center mb-4 border border-neon-blue/20">
+        <Users className="w-6 h-6 text-neon-blue" />
       </div>
 
-      <h3 className="text-2xl font-black mb-1 truncate pr-10 text-white tracking-tighter uppercase italic">{series.name}</h3>
-      <div className="flex items-center gap-2 text-neon-green text-xs font-black tracking-widest uppercase mb-8">
+      <h3 className="text-lg font-black mb-1 truncate pr-10 text-white tracking-tight uppercase italic">{series.name}</h3>
+      <div className="flex items-center gap-2 text-neon-green text-[9px] font-black tracking-widest uppercase mb-6">
         <span>{participantsCount} ALUNOS INSCRITOS</span>
       </div>
 
-      <div className="flex justify-between items-center pt-6 border-t border-white/5">
+      <div className="flex justify-between items-center pt-4 border-t border-white/5">
         <div>
-          <p className="text-[10px] text-white/30 uppercase font-black tracking-[0.2em] mb-1">CUSTO POR ALUNO</p>
-          <p className="font-black text-2xl text-neon-blue tracking-tighter">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(series.accessoryValue)}</p>
+          <p className="text-[8px] text-white/30 uppercase font-black tracking-[0.2em] mb-1">CUSTO/ALUNO</p>
+          <p className="font-black text-lg text-neon-blue tracking-tighter">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(series.accessoryValue)}</p>
         </div>
         <button 
           onClick={onClick}
-          className="bg-white hover:bg-neon-blue text-navy-dark px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl active:scale-95"
+          className="bg-white hover:bg-neon-blue text-navy-dark px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl active:scale-95"
         >
           VER ALUNOS
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3 h-3" />
         </button>
       </div>
     </div>
@@ -681,6 +729,8 @@ function ParticipantManager({ series, participants }: { series: Series, particip
   };
 
   const handleTogglePayment = async (p: Participant) => {
+    if (processingId === p.id) return;
+    setProcessingId(p.id);
     const newAmount = p.paidAmount >= series.accessoryValue ? 0 : series.accessoryValue;
     try {
       await updateDoc(doc(db, 'participants', p.id), {
@@ -689,6 +739,8 @@ function ParticipantManager({ series, participants }: { series: Series, particip
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `participants/${p.id}`);
+    } finally {
+      setTimeout(() => setProcessingId(null), 500); // Lock for 500ms to prevent accidental double clicks
     }
   };
 
@@ -702,85 +754,88 @@ function ParticipantManager({ series, participants }: { series: Series, particip
   };
 
   return (
-    <div className="space-y-10">
-      <div className="bg-white/5 backdrop-blur-sm p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-neon-green/5 blur-[50px]"></div>
-        <h3 className="font-black text-2xl mb-6 flex items-center gap-3 text-neon-green italic uppercase tracking-tighter">
-          <UserPlus className="w-8 h-8" />
+    <div className="space-y-8">
+      <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-neon-green/5 blur-[40px]"></div>
+        <h3 className="font-black text-lg mb-4 flex items-center gap-3 text-neon-green tracking-tight uppercase">
+          <UserPlus className="w-6 h-6" />
           INSERIR ALUNOS EM LOTE
         </h3>
-        <p className="text-white/40 text-sm mb-6 font-medium">Cole a lista de nomes (um por linha) para processamento instantâneo.</p>
+        <p className="text-white/40 text-xs mb-4 font-medium italic">Cole a lista de nomes (um por linha) para processamento.</p>
         <textarea 
           value={batchNames}
           onChange={e => setBatchNames(e.target.value)}
-          className="w-full h-40 p-6 rounded-2xl bg-navy-dark border border-white/10 focus:border-neon-green outline-none mb-6 font-mono text-sm text-white transition-all placeholder:text-white/10"
+          className="w-full h-32 p-4 rounded-xl bg-navy-dark border border-white/10 focus:border-neon-green outline-none mb-4 font-mono text-xs text-white transition-all placeholder:text-white/5"
           placeholder={"Exemplo:\nJoão Silva\nMaria Oliveira\nPedro Santos..."}
         />
         <button 
           onClick={handleAddBatch}
           disabled={addingBatch || !batchNames.trim()}
-          className="bg-neon-green hover:bg-neon-green/90 disabled:bg-white/5 disabled:text-white/20 text-navy-dark font-black py-4 px-10 rounded-2xl transition-all shadow-[0_0_20px_rgba(57,255,20,0.2)] active:scale-95"
+          className="bg-neon-green hover:bg-neon-green/90 disabled:bg-white/5 disabled:text-white/20 text-navy-dark font-black py-2.5 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(57,255,20,0.2)] active:scale-95 text-xs"
         >
           {addingBatch ? 'PROCESSANDO...' : `CADASTRAR ${batchNames.split('\n').filter(n => n.trim()).length} ALUNOS AGORA`}
         </button>
       </div>
 
-      <div className="bg-white/5 backdrop-blur-sm rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
-        <div className="p-8 border-b border-white/5 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-white/5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h3 className="font-black text-2xl text-white tracking-tighter uppercase italic">LISTA DE ALUNOS</h3>
-            <p className="text-neon-green text-[10px] font-black tracking-widest mt-1 uppercase">{participants.length} REGISTROS ENCONTRADOS</p>
+            <h3 className="font-black text-lg text-white tracking-tight uppercase italic">LISTA DE ALUNOS</h3>
+            <p className="text-neon-green text-[9px] font-black tracking-widest mt-1 uppercase">{participants.length} REGISTROS</p>
           </div>
-          <div className="relative w-full lg:w-80">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-white/20" />
+          <div className="relative w-full lg:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
             <input 
               type="text" 
-              placeholder="PESQUISAR ALUNO..."
+              placeholder="BUSCAR NOME..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white/5 border-none text-sm font-bold outline-none focus:ring-2 focus:ring-neon-blue transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border-none text-xs font-bold outline-none focus:ring-2 focus:ring-neon-blue transition-all"
             />
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-white/2 border-b border-white/5 uppercase font-black text-[10px] tracking-[0.2em] text-white/40">
-                <th className="px-8 py-6">Nome Completo</th>
-                <th className="px-8 py-6 text-center">Status de Pagamento</th>
-                <th className="px-8 py-6">Valor Atual</th>
-                <th className="px-8 py-6 text-right">Ações</th>
+              <tr className="bg-white/2 border-b border-white/5 uppercase font-black text-[9px] tracking-[0.2em] text-white/40">
+                <th className="px-6 py-4">Nome Completo</th>
+                <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4">Valor Pago</th>
+                <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredParticipants.map(p => {
                 const isPaid = p.paidAmount >= series.accessoryValue;
+                const isProcessing = processingId === p.id;
                 return (
                   <tr key={p.id} className="hover:bg-white/5 transition-all group">
-                    <td className="px-8 py-6 font-bold text-lg text-white/90">{p.name}</td>
-                    <td className="px-8 py-6 text-center">
+                    <td className="px-6 py-4 font-bold text-base text-white/90">{p.name}</td>
+                    <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => handleTogglePayment(p)}
-                        className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                        disabled={isProcessing}
+                        className={`px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                          isProcessing ? 'opacity-50 cursor-wait bg-white/10' :
                           isPaid 
                           ? 'bg-neon-green text-navy-dark shadow-neon-green/20' 
                           : 'bg-white/5 text-white/40 border border-white/10 hover:border-neon-green hover:text-neon-green'
                         }`}
                       >
-                        {isPaid ? '✓ PAGO' : 'QUITAR'}
+                        {isProcessing ? '...' : (isPaid ? '✓ PAGO' : 'QUITAR')}
                       </button>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className={`font-black text-xl tracking-tighter ${isPaid ? 'text-neon-green' : 'text-neon-red'}`}>
+                    <td className="px-6 py-4">
+                      <span className={`font-black text-base tracking-tighter ${isPaid ? 'text-neon-green' : 'text-neon-red'}`}>
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.paidAmount)}
                       </span>
                     </td>
-                    <td className="px-8 py-6 text-right">
+                    <td className="px-6 py-4 text-right">
                       <button 
                         onClick={() => handleDelete(p.id)} 
-                        className="bg-white/5 hover:bg-neon-red/20 text-white/20 hover:text-neon-red p-3 rounded-xl transition-all"
+                        className="bg-white/5 hover:bg-neon-red/20 text-white/20 hover:text-neon-red p-2 rounded-lg transition-all"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -789,8 +844,8 @@ function ParticipantManager({ series, participants }: { series: Series, particip
             </tbody>
           </table>
           {filteredParticipants.length === 0 && (
-            <div className="p-20 text-center">
-              <div className="text-white/10 font-black text-4xl uppercase italic opacity-20">Nenhum Aluno Encontrado</div>
+            <div className="p-16 text-center">
+              <div className="text-white/10 font-black text-lg uppercase italic opacity-20 tracking-tighter">Nenhum Aluno Encontrado</div>
             </div>
           )}
         </div>
@@ -807,9 +862,10 @@ function ExpenseForm() {
     e.preventDefault();
     if (!desc || !val) return;
     try {
+      const amount = parseFloat(val.replace(',', '.')) || 0;
       await addDoc(collection(db, 'expenses'), {
         description: desc,
-        amount: parseFloat(val),
+        amount,
         date: serverTimestamp()
       });
       setDesc('');
@@ -820,29 +876,29 @@ function ExpenseForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-      <div className="space-y-2">
-        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Descrição da Saída</label>
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div className="space-y-1">
+        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Descrição da Saída</label>
         <input 
           type="text" 
           value={desc} 
           onChange={e => setDesc(e.target.value)}
-          className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-red outline-none transition-all text-white font-bold"
-          placeholder="Ex: Tecidos, Pedrarias, Costura..."
+          className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:border-neon-red outline-none transition-all text-white font-bold text-sm"
+          placeholder="Ex: Tecidos, Pedrarias..."
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Valor Gasto (R$)</label>
+      <div className="space-y-1">
+        <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Valor Gasto (R$)</label>
         <input 
           type="number" 
           value={val} 
           onChange={e => setVal(e.target.value)}
-          className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-red outline-none transition-all text-white font-bold"
+          className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:border-neon-red outline-none transition-all text-white font-bold text-sm"
           placeholder="0,00"
         />
       </div>
-      <button className="bg-neon-red hover:bg-neon-red/90 text-white font-black py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,0,60,0.2)] active:scale-95">
-        <Plus className="w-6 h-6" />
+      <button className="bg-neon-red hover:bg-neon-red/90 text-white font-black py-2.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,0,60,0.2)] active:scale-95 text-xs">
+        <Plus className="w-4 h-4" />
         REGISTRAR GASTO
       </button>
     </form>
