@@ -30,6 +30,57 @@ import { motion, AnimatePresence } from 'motion/react';
 import { db, testConnection } from './firebase';
 import { Series, Participant, Expense, OperationType, FirestoreErrorInfo } from './types';
 
+function EditableAmount({ value, onSave, isPaid }: { value: number, onSave: (val: number) => void, isPaid: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempVal, setTempVal] = useState(value.toString());
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-black text-white/20">R$</span>
+        <input
+          autoFocus
+          type="text"
+          value={tempVal}
+          onChange={(e) => setTempVal(e.target.value)}
+          onBlur={() => {
+            const num = parseFloat(tempVal.replace(',', '.')) || 0;
+            onSave(num);
+            setIsEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const num = parseFloat(tempVal.replace(',', '.')) || 0;
+              onSave(num);
+              setIsEditing(false);
+            }
+            if (e.key === 'Escape') {
+              setTempVal(value.toString());
+              setIsEditing(false);
+            }
+          }}
+          className="w-20 bg-white/10 border border-neon-blue/50 rounded px-2 py-1 text-neon-blue font-black text-sm outline-none"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      onDoubleClick={() => setIsEditing(true)}
+      className="cursor-pointer group relative"
+      title="Clique duplo para editar valor manual"
+    >
+      <span className={`font-black text-base tracking-tighter ${isPaid ? 'text-neon-green' : 'text-neon-red'} group-hover:text-neon-blue transition-colors`}>
+        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+      </span>
+      <div className="absolute -top-4 left-0 text-[8px] font-black text-white/20 opacity-0 group-hover:opacity-100 uppercase tracking-widest transition-opacity pointer-events-none">
+        Clique duplo
+      </div>
+    </div>
+  );
+}
+
 function SafeDate({ date }: { date: any }) {
   if (!date) return <span className="opacity-20 italic">Processando...</span>;
   try {
@@ -878,9 +929,18 @@ function ParticipantManager({
                       </button>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`font-black text-base tracking-tighter ${isPaid ? 'text-neon-green' : 'text-neon-red'}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.paidAmount)}
-                      </span>
+                      <EditableAmount 
+                        value={paidAmount} 
+                        onSave={(newVal) => {
+                          if (processingId === p.id) return;
+                          setProcessingId(p.id);
+                          updateDoc(doc(db, 'participants', p.id), {
+                            paidAmount: newVal,
+                            updatedAt: serverTimestamp()
+                          }).finally(() => setTimeout(() => setProcessingId(null), 500));
+                        }}
+                        isPaid={isPaid}
+                      />
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button 
