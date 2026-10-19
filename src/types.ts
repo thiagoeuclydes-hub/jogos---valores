@@ -1,14 +1,20 @@
+export interface SeriesValue {
+  id: string;
+  name: string;
+  amount: number;
+}
+
 export interface Series {
   id: string;
   name: string;
-  accessoryValue: number;
+  values: SeriesValue[];
 }
 
 export interface Participant {
   id: string;
   seriesId: string;
   name: string;
-  paidAmount: number;
+  payments: Record<string, number>; // valueId -> amount
   updatedAt: any; // Firestore Timestamp
 }
 

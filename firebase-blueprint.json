@@ -9,12 +9,19 @@
           "type": "string",
           "description": "The name of the series."
         },
-        "accessoryValue": {
-          "type": "number",
-          "description": "The cost of accessories for this series."
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "amount": { "type": "number" }
+            }
+          }
         }
       },
-      "required": ["name", "accessoryValue"]
+      "required": ["name", "values"]
     },
     "Participant": {
       "title": "Participant",
@@ -29,9 +36,10 @@
           "type": "string",
           "description": "The name of the participant."
         },
-        "paidAmount": {
-          "type": "number",
-          "description": "Amount already paid by the participant."
+        "payments": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "Map of valueId to paid amount."
         },
         "updatedAt": {
           "type": "string",
@@ -39,7 +47,7 @@
           "description": "Last time the payment was updated."
         }
       },
-      "required": ["seriesId", "name", "paidAmount"]
+      "required": ["seriesId", "name"]
     },
     "Expense": {
       "title": "Expense",
