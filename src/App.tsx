@@ -85,6 +85,7 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [globalError, setGlobalError] = useState<string | null>(null);
   
   const [series, setSeries] = useState<Series[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -106,11 +107,15 @@ export default function App() {
     if (!isAuthenticated) return;
 
     setLoading(true);
+    setGlobalError(null);
+
     const unsubSeries = onSnapshot(collection(db, 'series'), (snapshot) => {
       const seriesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Series));
       setSeries(seriesData.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLoading(false);
     }, (err) => {
+      console.error("Series Load Error:", err);
+      setGlobalError(`Erro ao carregar séries: ${err.message}`);
       handleFirestoreError(err, OperationType.LIST, 'series');
       setLoading(false);
     });
@@ -118,11 +123,19 @@ export default function App() {
     const unsubParticipants = onSnapshot(collection(db, 'participants'), (snapshot) => {
       const participantData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Participant));
       setParticipants(participantData.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'participants'));
+    }, (err) => {
+      console.error("Participants Load Error:", err);
+      setGlobalError(`Erro ao carregar alunos: ${err.message}`);
+      handleFirestoreError(err, OperationType.LIST, 'participants');
+    });
 
     const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snapshot) => {
-      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'expenses'));
+      const expenseData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+      setExpenses(expenseData);
+    }, (err) => {
+      console.error("Expenses Load Error:", err);
+      handleFirestoreError(err, OperationType.LIST, 'expenses');
+    });
 
     return () => {
       unsubSeries();
@@ -311,6 +324,26 @@ export default function App() {
           <div className="h-1 w-12 bg-gradient-to-r from-neon-blue to-transparent rounded-full"></div>
         </header>
 
+        {globalError && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 bg-neon-red/10 border border-neon-red/20 p-4 rounded-xl flex items-center gap-4 text-neon-red text-xs font-bold"
+          >
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <div className="flex-1">
+              <p className="uppercase tracking-widest mb-1">Erro de Conexão com o Banco de Dados</p>
+              <p className="opacity-70 font-medium">{globalError}</p>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-neon-red text-white px-4 py-2 rounded-lg hover:bg-neon-red/80 transition-all uppercase"
+            >
+              Tentar Novamente
+            </button>
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
             <motion.div 
@@ -456,7 +489,12 @@ export default function App() {
                 <div className="bg-neon-blue/10 p-2 rounded-lg group-hover:bg-neon-blue/20 transition-all">←</div>
                 Voltar para lista de séries
               </button>
-              <ParticipantManager series={selectedSeries} participants={participants.filter(p => p.seriesId === selectedSeries.id)} />
+              <ParticipantManager 
+                series={selectedSeries} 
+                participants={participants.filter(p => p.seriesId === selectedSeries.id)} 
+                processingId={processingId}
+                setProcessingId={setProcessingId}
+              />
             </motion.div>
           )}
 
@@ -697,12 +735,24 @@ function SeriesCard({ series, participantsCount, onClick, onDelete }: { series: 
   );
 }
 
-function ParticipantManager({ series, participants }: { series: Series, participants: Participant[] }) {
+function ParticipantManager({ 
+  series, 
+  participants, 
+  processingId, 
+  setProcessingId 
+}: { 
+  series: Series, 
+  participants: Participant[],
+  processingId: string | null,
+  setProcessingId: (id: string | null) => void
+}) {
   const [batchNames, setBatchNames] = useState('');
   const [addingBatch, setAddingBatch] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredParticipants = participants.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredParticipants = participants.filter(p => 
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleAddBatch = async () => {
     const names = batchNames.split('\n').map(n => n.trim()).filter(n => n.length > 0);
@@ -806,7 +856,9 @@ function ParticipantManager({ series, participants }: { series: Series, particip
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredParticipants.map(p => {
-                const isPaid = p.paidAmount >= series.accessoryValue;
+                const accessoryValue = series.accessoryValue || 0;
+                const paidAmount = p.paidAmount || 0;
+                const isPaid = paidAmount >= accessoryValue;
                 const isProcessing = processingId === p.id;
                 return (
                   <tr key={p.id} className="hover:bg-white/5 transition-all group">
